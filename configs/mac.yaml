@@ -1,0 +1,70 @@
+# =============================================================================
+# Profile: Mac (Apple Silicon, 16GB unified memory)
+# =============================================================================
+# Optimized for MPS with tight memory constraints.
+# Use --quick for fast iteration, full run for overnight training.
+#
+#   bash train.sh --config configs/mac.yaml
+#   bash train.sh --config configs/mac.yaml --quick
+# =============================================================================
+
+model:
+  base_id: "sesame/csm-1b"
+  lora:
+    enabled: true
+    r: 16                        # Low rank — keeps optimizer state small
+    alpha: 32
+    dropout: 0.05
+    target_modules: 'backbone_model\.layers\.\d+\.self_attn\.(q_proj|v_proj|k_proj|o_proj)'
+
+data:
+  dataset_id: "google/fleurs"
+  dataset_config: "hi_in"
+  num_train_samples: 200         # ~1 hr of audio
+  num_val_samples: 100
+  sample_rate: 24000
+  max_audio_sec: 5               # SHORT — longer clips OOM on 16GB
+  processed_dir: "data/processed"
+
+training:
+  output_dir: "outputs/mac"
+  epochs: 5
+  batch_size: 1                  # Cannot go higher on 16GB
+  gradient_accumulation_steps: 4 # Effective batch size = 4
+  learning_rate: 2.0e-5
+  warmup_steps: 50
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  gradient_checkpointing: true   # REQUIRED — saves ~40% memory
+  save_steps: 100
+  eval_steps: 50
+  logging_steps: 5
+  save_total_limit: 2            # Disk space is limited
+
+inference:
+  adapter_path: "outputs/mac/final"
+  output_dir: "outputs/generated/mac"
+  max_new_tokens: 50             # ~4s audio — generation is slow on MPS
+  do_sample: false
+  prompts:
+    - "नमस्ते, आज मौसम बहुत अच्छा है।"
+    - "भारत एक विविधताओं से भरा देश है।"
+    - "क्या आप मुझे रास्ता बता सकते हैं?"
+    - "मुझे हिंदी में बात करना बहुत पसंद है।"
+    - "आज का दिन बहुत खास है।"
+
+evaluation:
+  whisper_model: "base"          # Larger models are slow on CPU
+  audio_dir: "outputs/generated/mac"
+
+hardware:
+  device: "mps"
+  dtype: "float32"               # MPS does NOT support bf16/fp16 training
+  dataloader_workers: 0          # MPS doesn't benefit from multiprocessing
+  pin_memory: false              # MUST be false for MPS
+
+logging:
+  tool: "both"
+  project: "hindi-speech-finetune"
+  run_name: null
+  tensorboard_log_dir: null

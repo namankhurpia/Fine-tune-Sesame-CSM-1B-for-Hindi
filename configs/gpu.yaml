@@ -1,0 +1,70 @@
+# =============================================================================
+# Profile: GPU (24GB+ VRAM — A10, 3090, 4090, A100, H100)
+# =============================================================================
+# Optimized for throughput on a CUDA GPU.
+# Larger batches, longer audio, more data, faster convergence.
+#
+#   bash train.sh --config configs/gpu.yaml
+#   CUDA_VISIBLE_DEVICES=0 bash train.sh --config configs/gpu.yaml
+# =============================================================================
+
+model:
+  base_id: "sesame/csm-1b"
+  lora:
+    enabled: true
+    r: 32                        # Higher rank — GPU has room for larger adapters
+    alpha: 64
+    dropout: 0.05
+    target_modules: 'backbone_model\.layers\.\d+\.self_attn\.(q_proj|v_proj|k_proj|o_proj)'
+
+data:
+  dataset_id: "google/fleurs"
+  dataset_config: "hi_in"
+  num_train_samples: 2120        # FULL FLEURS Hindi train set
+  num_val_samples: 239           # Full validation set
+  sample_rate: 24000
+  max_audio_sec: 10              # Longer clips — GPU can handle it
+  processed_dir: "data/processed"
+
+training:
+  output_dir: "outputs/gpu"
+  epochs: 10                     # More epochs — dataset is still small
+  batch_size: 4                  # 4x larger than Mac
+  gradient_accumulation_steps: 2 # Effective batch size = 8
+  learning_rate: 3.0e-5          # Slightly higher with larger batch
+  warmup_steps: 100
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  gradient_checkpointing: false  # Disable — trades memory for speed on 24GB+
+  save_steps: 200
+  eval_steps: 100
+  logging_steps: 10
+  save_total_limit: 5
+
+inference:
+  adapter_path: "outputs/gpu/final"
+  output_dir: "outputs/generated/gpu"
+  max_new_tokens: 250            # ~20s audio — fast on CUDA
+  do_sample: false
+  prompts:
+    - "नमस्ते, आज मौसम बहुत अच्छा है।"
+    - "भारत एक विविधताओं से भरा देश है।"
+    - "क्या आप मुझे रास्ता बता सकते हैं?"
+    - "मुझे हिंदी में बात करना बहुत पसंद है।"
+    - "आज का दिन बहुत खास है।"
+
+evaluation:
+  whisper_model: "medium"        # Better accuracy on GPU
+  audio_dir: "outputs/generated/gpu"
+
+hardware:
+  device: "cuda"
+  dtype: "bfloat16"              # Half precision — 2x faster, half memory
+  dataloader_workers: 4          # Parallel data loading
+  pin_memory: true               # Faster host-to-device transfer
+
+logging:
+  tool: "both"
+  project: "hindi-speech-finetune"
+  run_name: null
+  tensorboard_log_dir: null

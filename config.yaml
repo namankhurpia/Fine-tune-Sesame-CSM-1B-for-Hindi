@@ -1,0 +1,71 @@
+# =============================================================================
+# Default config — used when no --config flag is passed.
+# =============================================================================
+# For environment-specific profiles, use:
+#   bash train.sh --config configs/mac.yaml     # Apple Silicon (16GB)
+#   bash train.sh --config configs/gpu.yaml     # CUDA GPU (24GB+)
+#
+# This file uses "auto" for hardware detection, so it works anywhere,
+# but the dedicated profiles are tuned for their target hardware.
+# =============================================================================
+
+model:
+  base_id: "sesame/csm-1b"
+  lora:
+    enabled: true
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: 'backbone_model\.layers\.\d+\.self_attn\.(q_proj|v_proj|k_proj|o_proj)'
+
+data:
+  dataset_id: "google/fleurs"
+  dataset_config: "hi_in"
+  num_train_samples: 200
+  num_val_samples: 100
+  sample_rate: 24000
+  max_audio_sec: 5
+  processed_dir: "data/processed"
+
+training:
+  output_dir: "outputs/checkpoints"
+  epochs: 5
+  batch_size: 1
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-5
+  warmup_steps: 50
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  save_steps: 100
+  eval_steps: 50
+  logging_steps: 5
+  save_total_limit: 3
+
+inference:
+  adapter_path: "outputs/checkpoints/final"
+  output_dir: "outputs/generated"
+  max_new_tokens: 50
+  do_sample: false
+  prompts:
+    - "नमस्ते, आज मौसम बहुत अच्छा है।"
+    - "भारत एक विविधताओं से भरा देश है।"
+    - "क्या आप मुझे रास्ता बता सकते हैं?"
+    - "मुझे हिंदी में बात करना बहुत पसंद है।"
+    - "आज का दिन बहुत खास है।"
+
+evaluation:
+  whisper_model: "base"
+  audio_dir: "outputs/generated"
+
+hardware:
+  device: "auto"
+  dtype: "auto"
+  dataloader_workers: 0
+  pin_memory: false
+
+logging:
+  tool: "both"
+  project: "hindi-speech-finetune"
+  run_name: null
+  tensorboard_log_dir: null
