@@ -9,10 +9,13 @@ Usage:
 
 import argparse
 import os
+import platform
 from pathlib import Path
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+# MPS-specific env vars (no-op on CUDA/CPU)
+if platform.system() == "Darwin":
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+    os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 
 from transformers import Trainer, TrainingArguments
 
@@ -65,7 +68,7 @@ def main():
 
     print(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
-    collator = CSMCollator(processor, cfg["hardware"]["device"])
+    collator = CSMCollator(processor, cfg["hardware"]["device"], dtype=cfg["hardware"]["torch_dtype"])
 
     # --- Logging (W&B + TensorBoard via HuggingFace Trainer report_to) ---
     log_cfg = cfg["logging"]

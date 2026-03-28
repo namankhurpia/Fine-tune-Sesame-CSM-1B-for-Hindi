@@ -123,16 +123,24 @@ class ConversationDataset(Dataset):
 class CSMCollator:
     """Collates conversations into model inputs using CSM processor."""
 
-    def __init__(self, processor, device: str):
+    def __init__(self, processor, device: str, dtype=None):
         self.processor = processor
         self.device = device
+        self.dtype = dtype
 
     def __call__(self, features):
         convo = features[0]["conversation"]  # batch_size=1
         inputs = self.processor.apply_chat_template(
             convo, tokenize=True, return_dict=True, output_labels=True,
         )
-        # Don't move to device here — causes "Cannot re-initialize CUDA
-        # in forked subprocess" when dataloader_workers > 0.
-        # HF Trainer handles device placement automatically.
-        return {k: v for k, v in inputs.items()}
+        # Cast float tensors to model dtype (e.g. float32 -> bfloat16)
+        # to avoid dtype mismatch in the forward pass.
+        # Don't move to device here — HF Trainer handles that,
+        # and doing it in workers causes CUDA fork errors.
+        if self.dtype is not None:
+            import torch
+            inputs = {
+                k: v.to(dtype=self.dtype) if isinstance(v, torch.Tensor) and v.is_floating_point() else v
+                for k, v in inputs.items()
+            }
+        return inputs

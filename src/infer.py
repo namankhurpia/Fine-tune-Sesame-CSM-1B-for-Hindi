@@ -9,11 +9,13 @@ Usage:
 
 import argparse
 import os
+import platform
 import time
 from pathlib import Path
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+if platform.system() == "Darwin":
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+    os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 
 import torch
 
@@ -21,13 +23,19 @@ from .config import load_config
 from .model import load_for_inference
 
 
-def generate_one(model, processor, text: str, device: str, cfg: dict):
+def generate_one(model, processor, text: str, device: str, dtype, cfg: dict):
     """Generate audio for a single Hindi text prompt."""
     conversation = [
         {"role": "0", "content": [{"type": "text", "text": text}]},
     ]
     inputs = processor.apply_chat_template(conversation, tokenize=True, return_dict=True)
-    inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
+    # Move to device and cast float tensors to model dtype
+    inputs = {
+        k: v.to(device=device, dtype=dtype) if isinstance(v, torch.Tensor) and v.is_floating_point()
+        else v.to(device=device) if isinstance(v, torch.Tensor)
+        else v
+        for k, v in inputs.items()
+    }
 
     with torch.no_grad():
         audio = model.generate(
@@ -39,12 +47,12 @@ def generate_one(model, processor, text: str, device: str, cfg: dict):
     return audio
 
 
-def run_generation(model, processor, prompts, device, cfg, prefix, out_dir):
+def run_generation(model, processor, prompts, device, dtype, cfg, prefix, out_dir):
     """Generate audio for all prompts and save."""
     for i, text in enumerate(prompts):
         print(f"  [{i+1}/{len(prompts)}] {text[:50]}...", flush=True)
         t0 = time.time()
-        audio = generate_one(model, processor, text, device, cfg)
+        audio = generate_one(model, processor, text, device, dtype, cfg)
         elapsed = time.time() - t0
         out_path = out_dir / f"{prefix}_{i:02d}.wav"
         processor.save_audio(audio, str(out_path))
@@ -60,6 +68,7 @@ def main():
 
     cfg = load_config(args.config)
     device = cfg["hardware"]["device"]
+    dtype = cfg["hardware"]["torch_dtype"]
     out_dir = Path(cfg["inference"]["output_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,7 +79,7 @@ def main():
     if adapter_path.exists():
         print(f"\n--- Fine-tuned model (LoRA: {adapter_path}) ---")
         model, processor = load_for_inference(cfg, use_adapter=True)
-        run_generation(model, processor, prompts, device, cfg, "finetuned", out_dir)
+        run_generation(model, processor, prompts, device, dtype, cfg, "finetuned", out_dir)
         del model
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -81,7 +90,7 @@ def main():
     if args.baseline:
         print(f"\n--- Baseline model ({cfg['model']['base_id']}) ---")
         model, processor = load_for_inference(cfg, use_adapter=False)
-        run_generation(model, processor, prompts, device, cfg, "baseline", out_dir)
+        run_generation(model, processor, prompts, device, dtype, cfg, "baseline", out_dir)
 
     print(f"\nAll audio saved to {out_dir}/")
 
