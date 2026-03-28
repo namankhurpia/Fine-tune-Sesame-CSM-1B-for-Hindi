@@ -1,0 +1,43 @@
+# Dataset creation configuration
+# Paths are relative to the dataset/ directory
+
+text:
+  input_file: "text/sample_sentences.txt"    # One sentence per line
+  # Or use a directory of .txt files:
+  # input_dir: "text/"
+
+audio:
+  sample_rate: 24000                          # CSM requires 24kHz
+  output_dir: "audio/"                        # Raw audio files
+  format: "wav"                               # wav or flac
+
+tts:
+  # Which TTS model to use for synthesis
+  # Options: "f5-hindi", "mms-hindi"
+  model: "f5-hindi"
+
+  # F5-Hindi settings (SPRINGLab/F5-Hindi-24KHz)
+  f5_hindi:
+    model_id: "SPRINGLab/F5-Hindi-24KHz"
+    # Reference audio for voice cloning (optional)
+    ref_audio: null                           # Path to .wav file
+    ref_text: null                            # Transcription of ref audio
+
+  # Facebook MMS-TTS settings (fallback, lower quality)
+  mms_hindi:
+    model_id: "facebook/mms-tts-hin"
+
+recording:
+  sample_rate: 24000
+  channels: 1
+  duration_sec: 10                            # Max recording duration
+  output_dir: "audio/recorded/"
+
+transcription:
+  whisper_model: "medium"                     # tiny, base, small, medium, large
+  language: "hi"
+
+output:
+  dir: "output/"
+  train_ratio: 0.85                           # 85% train, 15% val
+  max_audio_sec: 10                           # Truncate audio longer than this

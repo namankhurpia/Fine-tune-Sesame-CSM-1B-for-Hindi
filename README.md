@@ -27,6 +27,7 @@ CSM is a **text-to-speech** model with a Mimi neural codec and two LLaMA-style d
 ├── train.sh                 # Training
 ├── infer.sh                 # Inference
 ├── evaluate.sh              # WER evaluation
+├── publish.sh               # Publish model to HuggingFace Hub
 ├── src/
 │   ├── config.py            # Config loader
 │   ├── model.py             # Model loading, LoRA, CSM patch
@@ -34,7 +35,9 @@ CSM is a **text-to-speech** model with a Mimi neural codec and two LLaMA-style d
 │   ├── train.py             # Training loop (HF Trainer)
 │   ├── infer.py             # Audio generation
 │   ├── evaluate.py          # Whisper ASR evaluation
-│   └── download_data.py     # Data download entry point
+│   ├── download_data.py     # Data download entry point
+│   └── publish.py           # HuggingFace Hub publisher
+├── dataset/                 # Custom dataset creation toolkit (see dataset/README.md)
 ├── data/                    # Downloaded datasets (gitignored)
 ├── outputs/                 # Checkpoints + generated audio (gitignored)
 └── requirements.txt
@@ -95,6 +98,24 @@ bash evaluate.sh
 ```
 
 Runs Whisper ASR on generated audio and computes Word Error Rate (WER) against the original Hindi text.
+
+### 7. Publish to HuggingFace Hub
+
+```bash
+# Push LoRA adapter with version tag
+bash publish.sh --tag v1-fleurs
+
+# Push with specific repo name
+bash publish.sh --repo your-username/csm-1b-hindi-lora --tag v1
+
+# Push full merged model (larger, no PEFT dependency to load)
+bash publish.sh --merged --tag v1-merged
+
+# Private repo
+bash publish.sh --tag v1 --private
+```
+
+Generates a model card with training stats, usage code, and architecture details. Creates a git tag for versioning. See [Publishing Models](#publishing-models) for full details.
 
 ## Config Profiles
 
@@ -188,7 +209,7 @@ CUDA_VISIBLE_DEVICES=0 bash train.sh --config configs/gpu.yaml
 uv run accelerate launch --num_processes 2 -m src.train --config configs/gpu.yaml
 ```
 
-### Cloud quick start (Colab / Lambda / RunPod)
+### Cloud quick start (Colab / Lambda / RunPod / Vast.ai)
 
 ```bash
 git clone <repo-url> && cd voice_model
@@ -198,6 +219,9 @@ bash download_data.sh --config configs/gpu.yaml
 bash train.sh --config configs/gpu.yaml
 bash infer.sh --config configs/gpu.yaml --baseline
 bash evaluate.sh --config configs/gpu.yaml
+
+# Publish to HuggingFace Hub before destroying the instance
+bash publish.sh --config configs/gpu.yaml --tag v1
 ```
 
 ## How It Works
@@ -239,6 +263,88 @@ Loads the base model + LoRA adapter, merges weights, and generates audio autoreg
 ### Evaluation
 
 Round-trip test: generated audio -> Whisper Hindi ASR -> compare transcription to original text -> WER.
+
+## Publishing Models
+
+Push your trained adapter to HuggingFace Hub for sharing, versioning, and easy loading.
+
+```bash
+bash publish.sh --config configs/gpu.yaml --tag v1-fleurs
+```
+
+### Options
+
+| Flag | Example | Description |
+|------|---------|-------------|
+| `--tag` | `--tag v2-500samples` | Version tag (creates a git tag on HuggingFace) |
+| `--repo` | `--repo user/my-model` | Custom repo name (default: `<user>/csm-1b-hindi-lora`) |
+| `--private` | `--private` | Create a private repo |
+| `--merged` | `--merged` | Push full merged model instead of LoRA adapter |
+| `--config` | `--config configs/gpu.yaml` | Config file (to find adapter path) |
+| `--adapter_path` | `--adapter_path outputs/gpu/final` | Override adapter path directly |
+
+### What gets published
+
+- **LoRA adapter files** (~15-30 MB) — or full merged model (~4 GB with `--merged`)
+- **Model card** (auto-generated README.md) with:
+  - Training stats (final loss, epochs, steps)
+  - LoRA config details
+  - Ready-to-copy Python usage code
+  - Architecture diagram
+- **Git tag** for versioning
+
+### Versioning workflow
+
+```bash
+# First training run — FLEURS 200 samples
+bash publish.sh --tag v1-fleurs-200
+
+# Retrain with more data
+bash publish.sh --tag v2-fleurs-full
+
+# Train on custom dataset
+bash publish.sh --tag v3-custom-500
+```
+
+### Loading a published model
+
+```python
+from transformers import CsmForConditionalGeneration
+from peft import PeftModel
+
+base = CsmForConditionalGeneration.from_pretrained("sesame/csm-1b")
+model = PeftModel.from_pretrained(base, "your-username/csm-1b-hindi-lora")
+model = model.merge_and_unload()
+```
+
+## Custom Dataset Creation
+
+The `dataset/` subfolder contains a complete toolkit for building your own Hindi speech dataset. See [`dataset/README.md`](dataset/README.md) for the full guide.
+
+### Approaches
+
+| Approach | Method | Speed | Quality |
+|----------|--------|-------|---------|
+| **A** | Synthetic TTS (F5-Hindi / MMS-TTS) | Fastest | Good, synthetic voice |
+| **B** | Record your own voice | Slow | Best, natural prosody |
+| **C** | Existing audio + Whisper transcription | Medium | Natural, depends on source |
+| **D** | Mix all sources | — | Best overall results |
+
+### Quick example (synthetic data)
+
+```bash
+cd dataset/
+uv pip install -r requirements.txt
+
+python scripts/01_collect_text.py --source iitb --count 500
+python scripts/02_synthesize_audio.py --tts mms
+python scripts/05_build_dataset.py --source synthesized
+python scripts/06_validate.py
+
+# Copy to training pipeline
+cp output/*_conversations.jsonl ../data/processed/
+cd .. && bash train.sh --quick
+```
 
 ## Hardware Requirements
 

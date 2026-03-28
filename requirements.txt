@@ -1,5 +1,4 @@
-torch>=2.4.0
-torchaudio>=2.4.0
+# torch + torchaudio: installed by setup.sh from PyTorch indexes (CPU vs CUDA) to avoid libcudart mismatches.
 transformers>=4.52.1
 accelerate>=0.30.0
 datasets>=2.19.0,<4.0

@@ -1,0 +1,22 @@
+# Dataset creation dependencies (in addition to main project requirements)
+# Install: uv pip install -r dataset/requirements.txt
+
+# TTS models
+f5-tts>=1.0.0
+soundfile
+librosa
+numpy
+
+# Transcription
+openai-whisper
+
+# Text processing
+indic-nlp-library
+
+# Audio recording
+sounddevice
+scipy
+
+# Validation
+jiwer
+tqdm
