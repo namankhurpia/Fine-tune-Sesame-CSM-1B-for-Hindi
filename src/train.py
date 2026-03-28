@@ -126,7 +126,10 @@ def main():
         eval_strategy="steps",
         eval_steps=t["eval_steps"],
         fp16=False,
-        bf16=(hw["device"] == "cuda" and hw["dtype"] == "bfloat16"),
+        # Don't use bf16=True — it enables torch.autocast which conflicts
+        # with CSM's index_put ops (audio embedding merge). The model is
+        # already loaded in bfloat16, so training runs in bf16 natively.
+        bf16=False,
         remove_unused_columns=False,
         dataloader_pin_memory=hw["pin_memory"],
         dataloader_num_workers=hw["dataloader_workers"],

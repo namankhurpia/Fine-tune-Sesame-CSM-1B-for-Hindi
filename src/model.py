@@ -54,10 +54,25 @@ def _patch_csm_inplace_op():
         modified = True
         print("  [patch] Added .clone() to embed_tokens output")
 
-    # Patch 3: dtype mismatch — Mimi codec can output float32 even when model is bfloat16
+    # Patch 3: dtype mismatch — Mimi codec outputs float32 but backbone is bfloat16.
+    # torch.autocast makes index_put see bf16 destination but .to(inputs_embeds.dtype)
+    # reads the real stored dtype (float32). Fix: cast audio_embeds to match, then
+    # assign without autocast interference.
     old_audio_assign = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask]"
-    new_audio_assign = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask].to(inputs_embeds.dtype)"
-    if old_audio_assign in code and ".to(inputs_embeds.dtype)" not in code:
+    new_audio_assign = (
+        "_audio_src = audio_embeds[audio_codes_mask]\n"
+        "        if _audio_src.dtype != inputs_embeds.dtype:\n"
+        "            _audio_src = _audio_src.to(inputs_embeds.dtype)\n"
+        "        inputs_embeds = inputs_embeds.clone()\n"
+        "        inputs_embeds[audio_token_mask] = _audio_src"
+    )
+    # Also handle the case where our previous .to() patch was applied but didn't work
+    old_audio_assign_v2 = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask].to(inputs_embeds.dtype)"
+    if old_audio_assign_v2 in code:
+        code = code.replace(old_audio_assign_v2, new_audio_assign)
+        modified = True
+        print("  [patch] Fixed audio embedding dtype mismatch (replaced v2 patch)")
+    elif old_audio_assign in code:
         code = code.replace(old_audio_assign, new_audio_assign)
         modified = True
         print("  [patch] Fixed audio embedding dtype mismatch")
