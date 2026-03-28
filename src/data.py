@@ -132,4 +132,7 @@ class CSMCollator:
         inputs = self.processor.apply_chat_template(
             convo, tokenize=True, return_dict=True, output_labels=True,
         )
-        return {k: v.to(self.device) if hasattr(v, "to") else v for k, v in inputs.items()}
+        # Don't move to device here — causes "Cannot re-initialize CUDA
+        # in forked subprocess" when dataloader_workers > 0.
+        # HF Trainer handles device placement automatically.
+        return {k: v for k, v in inputs.items()}
