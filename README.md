@@ -67,34 +67,54 @@ export HF_TOKEN=hf_your_token_here
 
 ### 3. Download Data
 
+Downloads [Google FLEURS Hindi](https://huggingface.co/datasets/google/fleurs), resamples to 24kHz, and formats into CSM conversation pairs.
+
 ```bash
+# Mac — 200 train + 100 val samples (small, fits in 16GB)
+bash download_data.sh --config configs/mac.yaml
+
+# GPU — 2120 train + 239 val samples (full FLEURS Hindi)
+bash download_data.sh --config configs/gpu.yaml
+
+# Auto-detect hardware (uses default config.yaml)
 bash download_data.sh
 ```
-
-Downloads [Google FLEURS Hindi](https://huggingface.co/datasets/google/fleurs) (200 train + 100 val samples by default), resamples to 24kHz, and formats into CSM conversation pairs.
 
 ### 4. Train
 
 ```bash
-# Sanity check — 10 samples, 2 epochs (~50 min on M2 Mac)
-bash train.sh --quick
+# --- Mac Apple Silicon ---
+bash train.sh --config configs/mac.yaml --quick    # Sanity check: 10 samples, 2 epochs
+bash train.sh --config configs/mac.yaml            # Full: 200 samples, 5 epochs
 
-# Full training with default config
+# --- GPU (24GB+) ---
+bash train.sh --config configs/gpu.yaml --quick    # Sanity check: 10 samples, 2 epochs
+bash train.sh --config configs/gpu.yaml            # Full: 2120 samples, 10 epochs
+
+# Auto-detect hardware
+bash train.sh --quick
 bash train.sh
 ```
 
 ### 5. Generate Audio
 
 ```bash
-bash infer.sh                              # Fine-tuned model
-bash infer.sh --baseline                   # Compare baseline vs fine-tuned
-bash infer.sh --prompt "नमस्ते, कैसे हैं आप?"  # Custom prompt
+# --- Mac ---
+bash infer.sh --config configs/mac.yaml                              # Fine-tuned model
+bash infer.sh --config configs/mac.yaml --baseline                   # Compare baseline vs fine-tuned
+bash infer.sh --config configs/mac.yaml --prompt "नमस्ते, कैसे हैं आप?"
+
+# --- GPU ---
+bash infer.sh --config configs/gpu.yaml
+bash infer.sh --config configs/gpu.yaml --baseline
+bash infer.sh --config configs/gpu.yaml --prompt "नमस्ते, कैसे हैं आप?"
 ```
 
 ### 6. Evaluate
 
 ```bash
-bash evaluate.sh
+bash evaluate.sh --config configs/mac.yaml     # Mac (uses Whisper base)
+bash evaluate.sh --config configs/gpu.yaml     # GPU (uses Whisper medium)
 ```
 
 Runs Whisper ASR on generated audio and computes Word Error Rate (WER) against the original Hindi text.
@@ -103,28 +123,38 @@ Runs Whisper ASR on generated audio and computes Word Error Rate (WER) against t
 
 ```bash
 # Push LoRA adapter with version tag
-bash publish.sh --tag v1-fleurs
+bash publish.sh --config configs/gpu.yaml --tag v1-fleurs
 
 # Push with specific repo name
 bash publish.sh --repo your-username/csm-1b-hindi-lora --tag v1
 
 # Push full merged model (larger, no PEFT dependency to load)
-bash publish.sh --merged --tag v1-merged
+bash publish.sh --config configs/gpu.yaml --merged --tag v1-merged
 
 # Private repo
-bash publish.sh --tag v1 --private
+bash publish.sh --config configs/gpu.yaml --tag v1 --private
 ```
 
 Generates a model card with training stats, usage code, and architecture details. Creates a git tag for versioning. See [Publishing Models](#publishing-models) for full details.
 
 ## Config Profiles
 
-The project ships with two hardware profiles under `configs/`. Pass `--config` to any script to use one:
+The project ships with two hardware profiles under `configs/`. Pass `--config` to **any** script to use one:
 
 ```bash
-bash train.sh --config configs/mac.yaml        # Apple Silicon
-bash train.sh --config configs/gpu.yaml        # CUDA GPU
-bash train.sh --config configs/mac.yaml --quick # Quick test on Mac
+# Every script accepts --config
+bash download_data.sh --config configs/mac.yaml
+bash train.sh --config configs/mac.yaml
+bash infer.sh --config configs/mac.yaml
+bash evaluate.sh --config configs/mac.yaml
+bash publish.sh --config configs/mac.yaml --tag v1
+
+# Same for GPU
+bash download_data.sh --config configs/gpu.yaml
+bash train.sh --config configs/gpu.yaml
+bash infer.sh --config configs/gpu.yaml
+bash evaluate.sh --config configs/gpu.yaml
+bash publish.sh --config configs/gpu.yaml --tag v1
 ```
 
 ### Mac vs GPU — side by side
@@ -194,6 +224,19 @@ Set `logging.tool` in your config file:
 - `"tensorboard"` — TensorBoard only
 - `"none"` — disable logging
 
+## Mac Quick Start (Apple Silicon)
+
+```bash
+bash setup.sh
+export HF_TOKEN=hf_your_token_here
+
+bash download_data.sh --config configs/mac.yaml       # 200 train samples
+bash train.sh --config configs/mac.yaml --quick        # Sanity check (~50 min)
+bash train.sh --config configs/mac.yaml                # Full training (~5 hrs)
+bash infer.sh --config configs/mac.yaml --baseline
+bash evaluate.sh --config configs/mac.yaml
+```
+
 ## GPU Environment
 
 ### Single GPU
@@ -209,20 +252,32 @@ CUDA_VISIBLE_DEVICES=0 bash train.sh --config configs/gpu.yaml
 uv run accelerate launch --num_processes 2 -m src.train --config configs/gpu.yaml
 ```
 
-### Cloud quick start (Colab / Lambda / RunPod / Vast.ai)
+### Cloud quick start (Vast.ai / RunPod / Lambda / Colab)
 
 ```bash
+# 1. Setup
 git clone <repo-url> && cd voice_model
 bash setup.sh
-export HF_TOKEN=hf_xxx
+
+# 2. Authenticate
+export HF_TOKEN=hf_your_token_here
+uv run huggingface-cli login --token $HF_TOKEN
+
+# 3. Download full FLEURS Hindi dataset (2120 train samples)
 bash download_data.sh --config configs/gpu.yaml
+
+# 4. Train (full: ~1hr on 24GB GPU)
 bash train.sh --config configs/gpu.yaml
+
+# 5. Inference + Evaluation
 bash infer.sh --config configs/gpu.yaml --baseline
 bash evaluate.sh --config configs/gpu.yaml
 
-# Publish to HuggingFace Hub before destroying the instance
+# 6. Publish to HuggingFace Hub before destroying the instance
 bash publish.sh --config configs/gpu.yaml --tag v1
 ```
+
+Use `tmux` to protect long-running commands from SSH disconnects.
 
 ## How It Works
 
@@ -336,10 +391,10 @@ The `dataset/` subfolder contains a complete toolkit for building your own Hindi
 cd dataset/
 uv pip install -r requirements.txt
 
-python scripts/01_collect_text.py --source iitb --count 500
-python scripts/02_synthesize_audio.py --tts mms
-python scripts/05_build_dataset.py --source synthesized
-python scripts/06_validate.py
+uv run python scripts/01_collect_text.py --source iitb --count 500
+uv run python scripts/02_synthesize_audio.py --tts mms
+uv run python scripts/05_build_dataset.py --source synthesized
+uv run python scripts/06_validate.py
 
 # Copy to training pipeline
 cp output/*_conversations.jsonl ../data/processed/

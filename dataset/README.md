@@ -83,38 +83,38 @@ uv pip install -r requirements.txt
 
 ```bash
 # Step 1: Collect Hindi text (uses included sample sentences)
-python scripts/01_collect_text.py
+uv run python scripts/01_collect_text.py
 
 # Or download 500 sentences from IIT Bombay corpus:
-python scripts/01_collect_text.py --source iitb --count 500
+uv run python scripts/01_collect_text.py --source iitb --count 500
 
 # Step 2: Synthesize audio with F5-Hindi TTS
-python scripts/02_synthesize_audio.py
+uv run python scripts/02_synthesize_audio.py
 
 # Or use lighter MMS-TTS model:
-python scripts/02_synthesize_audio.py --tts mms
+uv run python scripts/02_synthesize_audio.py --tts mms
 
 # Step 5: Build JSONL dataset
-python scripts/05_build_dataset.py --source synthesized
+uv run python scripts/05_build_dataset.py --source synthesized
 
 # Step 6: Validate
-python scripts/06_validate.py
+uv run python scripts/06_validate.py
 ```
 
 ### Approach B: Record Your Own Audio
 
 ```bash
 # Step 1: (Optional) Collect text or use sample_sentences.txt
-python scripts/01_collect_text.py
+uv run python scripts/01_collect_text.py
 
 # Step 3: Record (interactive, shows sentences one at a time)
-python scripts/03_record_audio.py
+uv run python scripts/03_record_audio.py
 
 # Step 5: Build JSONL dataset
-python scripts/05_build_dataset.py --source recorded
+uv run python scripts/05_build_dataset.py --source recorded
 
 # Step 6: Validate
-python scripts/06_validate.py
+uv run python scripts/06_validate.py
 ```
 
 ### Approach C: From Existing Audio
@@ -123,15 +123,15 @@ python scripts/06_validate.py
 # Put your Hindi audio files (.wav, .mp3, .flac) in audio/raw/
 
 # Step 4: Transcribe with Whisper
-python scripts/04_transcribe_audio.py --input_dir audio/raw/
+uv run python scripts/04_transcribe_audio.py --input_dir audio/raw/
 
 # Step 5: Build JSONL dataset
-python scripts/05_build_dataset.py \
+uv run python scripts/05_build_dataset.py \
     --manifest audio/raw/manifest.txt \
     --audio_dir audio/raw/
 
 # Step 6: Validate
-python scripts/06_validate.py
+uv run python scripts/06_validate.py
 ```
 
 ### Use with Training Pipeline
@@ -188,7 +188,7 @@ bash train.sh                  # Full training
 
 **Voice cloning with F5-Hindi:** Provide a 5-15s reference WAV of the target voice:
 ```bash
-python scripts/02_synthesize_audio.py \
+uv run python scripts/02_synthesize_audio.py \
     --ref_audio my_voice.wav \
     --ref_text "मेरा नाम नमन है और मैं दिल्ली में रहता हूँ"
 ```
@@ -300,7 +300,7 @@ uv pip install cached-path jieba pypinyin
 **Whisper SSL error:**
 ```bash
 uv pip install certifi
-export SSL_CERT_FILE=$(python -c "import certifi; print(certifi.where())")
+export SSL_CERT_FILE=$(uv run python -c "import certifi; print(certifi.where())")
 ```
 
 **Audio sounds too fast/slow after resampling:**
