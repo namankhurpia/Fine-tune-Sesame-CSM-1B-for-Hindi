@@ -57,25 +57,31 @@ def _patch_csm_inplace_op():
     # Patch 3: dtype mismatch — Mimi codec outputs float32 but backbone is bfloat16.
     # torch.autocast makes index_put see bf16 destination but .to(inputs_embeds.dtype)
     # reads the real stored dtype (float32). Fix: cast audio_embeds to match, then
-    # assign without autocast interference.
-    old_audio_assign = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask]"
-    new_audio_assign = (
-        "_audio_src = audio_embeds[audio_codes_mask]\n"
-        "        if _audio_src.dtype != inputs_embeds.dtype:\n"
-        "            _audio_src = _audio_src.to(inputs_embeds.dtype)\n"
-        "        inputs_embeds = inputs_embeds.clone()\n"
-        "        inputs_embeds[audio_token_mask] = _audio_src"
-    )
-    # Also handle the case where our previous .to() patch was applied but didn't work
-    old_audio_assign_v2 = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask].to(inputs_embeds.dtype)"
-    if old_audio_assign_v2 in code:
-        code = code.replace(old_audio_assign_v2, new_audio_assign)
-        modified = True
-        print("  [patch] Fixed audio embedding dtype mismatch (replaced v2 patch)")
-    elif old_audio_assign in code:
-        code = code.replace(old_audio_assign, new_audio_assign)
-        modified = True
-        print("  [patch] Fixed audio embedding dtype mismatch")
+    # assign with .clone() to break autocast chain.
+    # Indentation is detected dynamically from the source file.
+    old_audio_v2 = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask].to(inputs_embeds.dtype)"
+    old_audio_v1 = "inputs_embeds[audio_token_mask] = audio_embeds[audio_codes_mask]"
+    marker = "_audio_src = audio_embeds"  # skip if already patched
+
+    if marker not in code:
+        # Find which version exists and detect its indentation
+        for old_str in [old_audio_v2, old_audio_v1]:
+            if old_str in code:
+                idx = code.index(old_str)
+                line_start = code.rfind("\n", 0, idx) + 1
+                indent = code[line_start:idx]  # whitespace before the line
+
+                new_audio_assign = (
+                    f"_audio_src = audio_embeds[audio_codes_mask]\n"
+                    f"{indent}if _audio_src.dtype != inputs_embeds.dtype:\n"
+                    f"{indent}    _audio_src = _audio_src.to(inputs_embeds.dtype)\n"
+                    f"{indent}inputs_embeds = inputs_embeds.clone()\n"
+                    f"{indent}inputs_embeds[audio_token_mask] = _audio_src"
+                )
+                code = code.replace(old_str, new_audio_assign, 1)
+                modified = True
+                print("  [patch] Fixed audio embedding dtype mismatch")
+                break
 
     if modified:
         with open(src_file, "w") as f:
