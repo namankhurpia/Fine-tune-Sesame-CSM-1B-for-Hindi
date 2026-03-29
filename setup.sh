@@ -2,11 +2,12 @@
 # =============================================================================
 # Environment setup: installs uv, creates venv, patches CSM for PEFT.
 #
-# PyTorch wheels: default "auto" uses CUDA 12.4 builds if nvidia-smi exists,
+# PyTorch wheels: default "auto" uses CUDA 12.8 builds if nvidia-smi exists,
 # else CPU-only (avoids missing libcudart.so.* on CPU VMs).
+# CUDA 12.8 supports RTX 50-series (Blackwell) + all older GPUs.
 #   SETUP_TORCH=cpu   bash setup.sh   # force CPU (recommended for CPU-only VMs)
-#   SETUP_TORCH=cuda  bash setup.sh   # force CUDA 12.4 wheels
-#   TORCH_INDEX_URL=https://download.pytorch.org/whl/cu126 bash setup.sh  # override index
+#   SETUP_TORCH=cuda  bash setup.sh   # force CUDA 12.8 wheels
+#   TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 bash setup.sh  # override index
 # =============================================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -31,15 +32,17 @@ export VIRTUAL_ENV="$ROOT/.venv"
 export UV_PYTHON="$ROOT/.venv/bin/python"
 
 # --- PyTorch / torchaudio: explicit index (PyPI default can pull CUDA 13+ and break on CPU VMs) ---
+# RTX 50-series (Blackwell, sm_120) requires CUDA 12.8+ wheels.
+# Older GPUs (Ampere/Hopper) also work fine with cu128.
 SETUP_TORCH="${SETUP_TORCH:-auto}"
 if [[ -n "${TORCH_INDEX_URL:-}" ]]; then
     TORCH_INDEX="$TORCH_INDEX_URL"
 elif [[ "$SETUP_TORCH" == "cpu" ]]; then
     TORCH_INDEX="https://download.pytorch.org/whl/cpu"
 elif [[ "$SETUP_TORCH" == "cuda" ]]; then
-    TORCH_INDEX="https://download.pytorch.org/whl/cu124"
+    TORCH_INDEX="https://download.pytorch.org/whl/cu128"
 elif [[ "$SETUP_TORCH" == "auto" ]] && command -v nvidia-smi &>/dev/null; then
-    TORCH_INDEX="https://download.pytorch.org/whl/cu124"
+    TORCH_INDEX="https://download.pytorch.org/whl/cu128"
 else
     TORCH_INDEX="https://download.pytorch.org/whl/cpu"
 fi

@@ -45,7 +45,9 @@ inference:
   adapter_path: "outputs/mac/final"
   output_dir: "outputs/generated/mac"
   max_new_tokens: 50             # ~4s audio — generation is slow on MPS
-  do_sample: false
+  do_sample: true                # Sampling required — greedy produces silence
+  temperature: 0.7
+  top_k: 50
   prompts:
     - "नमस्ते, आज मौसम बहुत अच्छा है।"
     - "भारत एक विविधताओं से भरा देश है।"

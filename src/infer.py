@@ -37,13 +37,17 @@ def generate_one(model, processor, text: str, device: str, dtype, cfg: dict):
         for k, v in inputs.items()
     }
 
+    gen_kwargs = dict(
+        output_audio=True,
+        max_new_tokens=cfg["inference"]["max_new_tokens"],
+        do_sample=cfg["inference"]["do_sample"],
+    )
+    if gen_kwargs["do_sample"]:
+        gen_kwargs["temperature"] = cfg["inference"].get("temperature", 0.7)
+        gen_kwargs["top_k"] = cfg["inference"].get("top_k", 50)
+
     with torch.no_grad():
-        audio = model.generate(
-            **inputs,
-            output_audio=True,
-            max_new_tokens=cfg["inference"]["max_new_tokens"],
-            do_sample=cfg["inference"]["do_sample"],
-        )
+        audio = model.generate(**inputs, **gen_kwargs)
     return audio
 
 
