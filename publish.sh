@@ -3,9 +3,9 @@
 # Publish trained LoRA adapter to HuggingFace Hub.
 #
 # Usage:
-#   bash publish.sh                                          # Interactive
+#   bash publish.sh                                          # Interactive (auto-finds outputs/{gpu,mac,checkpoints}/final)
 #   bash publish.sh --repo namankhurpia/csm-1b-hindi-lora    # Specify repo
-#   bash publish.sh --config configs/gpu.yaml                # GPU adapter
+#   bash publish.sh --config configs/gpu.yaml                # Use GPU profile paths + hyperparams for model card context
 #   bash publish.sh --tag v2-500samples                      # Version tag
 #   bash publish.sh --private                                # Private repo
 #   bash publish.sh --merged                                 # Push full merged model

@@ -181,12 +181,36 @@ def main():
     from .config import load_config
     cfg = load_config(args.config)
 
-    adapter_path = args.adapter_path or cfg["inference"]["adapter_path"]
+    configured_adapter = cfg["inference"]["adapter_path"]
+    adapter_path = args.adapter_path or configured_adapter
 
     if not Path(adapter_path).exists():
-        print(f"Error: Adapter not found at {adapter_path}")
-        print(f"  Train first: bash train.sh --config {args.config}")
-        return
+        if args.adapter_path is not None:
+            print(f"Error: Adapter not found at {adapter_path}")
+            return
+        # Train profiles write to outputs/{gpu,mac,checkpoints}/final — pick first that exists
+        fallbacks = [
+            "outputs/gpu/final",
+            "outputs/mac/final",
+            "outputs/checkpoints/final",
+        ]
+        for fb in fallbacks:
+            if Path(fb).exists():
+                adapter_path = fb
+                if fb != configured_adapter:
+                    print(
+                        f"Note: Config has adapter_path={configured_adapter!r} (missing); "
+                        f"using {adapter_path!r}. For explicit control: "
+                        f"bash publish.sh --config configs/gpu.yaml"
+                    )
+                break
+        else:
+            print(f"Error: Adapter not found at {configured_adapter}")
+            print("  Tried: outputs/gpu/final, outputs/mac/final, outputs/checkpoints/final")
+            print(f"  Train first: bash train.sh --config configs/gpu.yaml  # or configs/mac.yaml")
+            return
+
+    cfg["inference"]["adapter_path"] = adapter_path
 
     # Resolve repo name
     api = HfApi()
