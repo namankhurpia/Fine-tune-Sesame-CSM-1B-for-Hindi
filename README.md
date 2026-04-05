@@ -425,6 +425,59 @@ Once the pipeline is proven:
 3. **Larger LoRA**: GPU profile already uses `r=32`; go to 64 with more VRAM
 4. **Full speech-to-speech**: Consider [Kyutai Moshi](https://github.com/kyutai-labs/moshi) on cloud GPUs for true duplex interaction
 
+## Results & Outputs
+
+### Training Metrics
+
+Training loss, learning rate, gradient norm, and epoch progression from the GPU run (2120 FLEURS Hindi samples, 10 epochs, LoRA r=32):
+
+![Training metrics](pictures/train.png)
+
+### Evaluation Metrics
+
+Eval loss, runtime, and throughput over training steps:
+
+![Evaluation metrics](pictures/eval.png)
+
+### Findings
+
+![Results summary](pictures/results.png)
+
+**Key takeaways from the GPU run:**
+- Train loss starts at ~128 and oscillates between 119–24 on a downward trend
+- Eval loss drops from ~116.7 to ~111.2 (-5%, statistically noisy given ~2k samples)
+- LoRA on a 1.7B English-pretrained backbone with only 2,120 Hindi pairs is insufficient to learn Devanagari pronunciation — the model mostly reproduces English prosody
+- To meaningfully improve: scale to 5,000–10,000+ Hindi samples (use the `dataset/` toolkit with F5-Hindi / MMS-TTS synthesis combined with FLEURS), raise LoRA rank to 64, and train longer
+
+### Generated Audio
+
+Inference outputs are written to `outputs/generated/<profile>/` — the GPU run in this repo produced 5 baseline vs. 5 fine-tuned samples:
+
+```
+outputs/generated/gpu/
+├── baseline_00.wav    # CSM-1B base model, no fine-tuning
+├── baseline_01.wav
+├── baseline_02.wav
+├── baseline_03.wav
+├── baseline_04.wav
+├── finetuned_00.wav   # CSM-1B + LoRA adapter (this repo)
+├── finetuned_01.wav
+├── finetuned_02.wav
+├── finetuned_03.wav
+└── finetuned_04.wav
+```
+
+Regenerate with:
+
+```bash
+bash infer.sh --config configs/gpu.yaml --baseline   # writes both baseline + finetuned
+bash evaluate.sh --config configs/gpu.yaml           # WER vs. original Hindi text
+```
+
+### Trained Adapter
+
+The final LoRA adapter is saved at `outputs/gpu/final/` (~adapter_model.safetensors + config). Intermediate checkpoints every 200 steps are kept under `outputs/gpu/checkpoint-*/` for resume or comparison. TensorBoard event files live in `outputs/gpu/tensorboard/`.
+
 ## License
 
 This project fine-tunes the [Sesame CSM-1B](https://huggingface.co/sesame/csm-1b) model. See their license for model usage terms. FLEURS data is CC-BY-4.0.
